@@ -16,6 +16,31 @@
 #include "util/mutexlock.h"
 #include "util/random.h"
 #include "util/testutil.h"
+#include <cassert>
+#include <iostream>
+#include <string>
+#include <cstring>
+#include <sstream>
+#include <cstdlib>
+#include <sys/mman.h>
+#include <sys/time.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+
+
+#define MAX_TRACE_OPS 100000000
+#define MAX_VALUE_SIZE (1024 * 1024)
+#define sassert(X) {if (!(X)) std::cerr << "\n\n\n\n" << status.ToString() << "\n\n\n\n"; assert(X);}
+
+//#define TIMER_LOG
+
+#ifdef TIMER_LOG
+#define micros(a) a = Env::Default()->NowMicros()
+#define print_timer_info(a, b, c)   printf("%s: %lu micros (%f ms)\n", a, abs(b - c), abs(b - c)/1000.0);
+#else
+#define micros(a)
+#define print_timer_info(a, b, c)
+#endif
 
 // Comma-separated list of operations to run in the specified order
 //   Actual benchmarks:
@@ -40,7 +65,8 @@
 //      stats       -- Print DB stats
 //      sstables    -- Print sstable info
 //      heapprofile -- Dump a heap profile (if supported by this port)
-static const char* FLAGS_benchmarks =
+static const char* FLAGS_benchmarks = "fillrandom,readrandom,seekrandom";
+/*
     "fillseq,"
     "fillsync,"
     "fillrandom,"
@@ -59,9 +85,10 @@ static const char* FLAGS_benchmarks =
     "snappyuncomp,"
     "acquireload,"
     ;
+*/
 
 // Number of key/values to place in database
-static int FLAGS_num = 1000000;
+static int FLAGS_num = 10000000;
 
 // Number of read operations to do.  If negative, do FLAGS_num reads.
 static int FLAGS_reads = -1;
@@ -70,11 +97,11 @@ static int FLAGS_reads = -1;
 static int FLAGS_threads = 1;
 
 // Size of each value
-static int FLAGS_value_size = 100;
+static int FLAGS_value_size = 1024;
 
 // Arrange to generate values that shrink to this fraction of
 // their original size after compression
-static double FLAGS_compression_ratio = 0.5;
+static double FLAGS_compression_ratio = 1;
 
 // Print histogram of operation timings
 static bool FLAGS_histogram = false;
@@ -100,7 +127,7 @@ static int FLAGS_open_files = 0;
 
 // Bloom filter bits per key.
 // Negative means use default settings.
-static int FLAGS_bloom_bits = -1;
+static int FLAGS_bloom_bits = 10;
 
 // If true, do not destroy the existing database.  If you set this
 // flag and also specify a benchmark that wants a fresh database, that
@@ -430,6 +457,281 @@ class Benchmark {
     delete filter_policy_;
   }
 
+  void TryReopen() {
+	  if (db_ != NULL) {
+		  delete db_;
+	  }
+	  db_ = NULL;
+	  Open(); //DB::Open(opts, dbname_, &db_);
+  }
+	
+  struct trace_operation_t {
+	  char cmd;
+	  unsigned long long key;
+	  unsigned long param;
+  };
+  struct trace_operation_t *trace_ops[10]; // Assuming maximum of 10 concurrent threads
+	
+	struct result_t {
+		unsigned long long ycsbdata;
+		unsigned long long kvdata;
+		unsigned long long ycsb_r;
+		unsigned long long ycsb_d;
+		unsigned long long ycsb_i;
+		unsigned long long ycsb_u;
+		unsigned long long ycsb_s;
+		unsigned long long kv_p;
+		unsigned long long kv_g;
+		unsigned long long kv_d;
+		unsigned long long kv_itseek;
+		unsigned long long kv_itnext;
+	};
+	
+  struct result_t results[10];
+	
+  unsigned long long print_splitup(int tid) {
+	  struct result_t& result = results[tid];
+	  printf("YCSB splitup: R = %llu, D = %llu, I = %llu, U = %llu, S = %llu\n",
+		 result.ycsb_r,
+		 result.ycsb_d,
+		 result.ycsb_i,
+		 result.ycsb_u,
+		 result.ycsb_s);
+	  printf("LevelDB/WiscKey splitup: P = %llu, G = %llu, D = %llu, ItSeek = %llu, ItNext = %llu\n",
+		 result.kv_p,
+		 result.kv_g,
+		 result.kv_d,
+		 result.kv_itseek,
+		 result.kv_itnext);
+	  return result.ycsb_r + result.ycsb_d + result.ycsb_i + result.ycsb_u + result.ycsb_s;
+  }
+	
+  int split_file_names(const char *file, char file_names[20][100]) {
+	  char delimiter = ',';
+	  int index  = 0;
+	  int cur = 0;
+	  for (int i = 0; i < strlen(file); i++) {
+		  if (file[i] == ',') {
+			  if (cur > 0) {
+				  file_names[index][cur] = '\0';
+				  index++;
+				  cur = 0;
+			  }
+			  continue;
+		  }
+		  if (file[i] == ' ') {
+			  continue;
+		  }
+		  file_names[index][cur] = file[i];
+		  cur++;
+	  }
+	  if (cur > 0) {
+		  file_names[index][cur] = '\0';
+		  cur = 0;
+		  index++;
+	  }
+	  return index;
+  }
+	
+  void parse_trace(const char *file, int tid) {
+	  int ret;
+	  char *buf;
+	  FILE *fp;
+	  size_t bufsize = 1000;
+	  struct trace_operation_t *curop = NULL;
+	  unsigned long long total_ops = 0;
+		
+	  char file_names[20][100];
+	  int num_trace_files = split_file_names(file, file_names);
+		
+	  const char* corresponding_file;
+	  if (tid >= num_trace_files) {
+		  corresponding_file = file_names[num_trace_files-1]; // Take the last file if number of files is lesser
+	  } else {
+		  corresponding_file = file_names[tid];
+	  }
+		
+	  printf("Thread %d: Parsing trace ...\n", tid);
+	  trace_ops[tid] = (struct trace_operation_t *) mmap(NULL, MAX_TRACE_OPS * sizeof(struct trace_operation_t), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	  if (trace_ops[tid] == MAP_FAILED)
+		  perror(NULL);
+	  assert(trace_ops[tid] != MAP_FAILED);
+		
+	  buf = (char *) malloc(bufsize);
+	  assert (buf != NULL);
+		
+	  fp = fopen(corresponding_file, "r");
+	  assert(fp != NULL);
+	  curop = trace_ops[tid];
+	  while((ret = getline(&buf, &bufsize, fp)) > 0) {
+		  char tmp[1000];
+		  ret = sscanf(buf, "%c %llu %lu\n", &curop->cmd, &curop->key, &curop->param);
+		  assert(ret == 2 || ret == 3);
+		  if (curop->cmd == 'r' || curop->cmd == 'd') {
+			  assert(ret == 2);
+			  sprintf(tmp, "%c %llu\n", curop->cmd, curop->key);
+			  assert(strcmp(tmp, buf) == 0);
+		  } else if (curop->cmd == 's' || curop->cmd == 'u' || curop->cmd == 'i') {
+			  assert(ret == 3);
+			  sprintf(tmp, "%c %llu %lu\n", curop->cmd, curop->key, curop->param);
+			  assert(strcmp(tmp, buf) == 0);
+		  } else {
+			  assert(false);
+		  }
+		  curop++;
+		  total_ops++;
+	  }
+	  printf("Thread %d: Done parsing, %llu operations.\n", tid, total_ops);
+  }
+	
+  char valuebuf[MAX_VALUE_SIZE];
+	
+  void perform_op(DB *db, struct trace_operation_t *op, int tid) {
+	  char keybuf[100];
+	  int keylen;
+	  Status status;
+	  instrumentation_type db_read_time;
+	  static struct ReadOptions roptions;
+	  static struct WriteOptions woptions;
+		
+	  keylen = sprintf(keybuf, "user%llu", op->key);
+	  Slice key(keybuf, keylen);
+		
+	  struct result_t& result = results[tid];
+	  if (op->cmd == 'r') {
+		  std::string value;
+		  //START_TIMING(db_read_t, db_read_time);
+		  status = db->Get(roptions, key, &value);
+		  //END_TIMING(db_read_t, db_read_time);		  
+		  sassert(status.ok());
+		  result.ycsbdata += keylen + value.length();
+		  result.kvdata += keylen + value.length();
+		  //assert(value.length() == 1080);
+		  result.ycsb_r++;
+		  result.kv_g++;
+	  } else if (op->cmd == 'd') {
+		  status = db->Delete(woptions, key);
+		  sassert(status.ok());
+		  result.ycsbdata += keylen;
+		  result.kvdata += keylen;
+		  result.ycsb_d++;
+		  result.kv_d++;
+	  } else if (op->cmd == 'i') {
+		  // op->param refers to the size of the value.
+		  status = db->Put(woptions, key, Slice(valuebuf, op->param));
+		  sassert(status.ok());
+		  result.ycsbdata += keylen + op->param;
+		  result.kvdata += keylen + op->param;
+		  result.ycsb_i++;
+		  result.kv_p++;
+	  } else if (op->cmd == 'u') {
+		  int update_value_size = 1024;
+		  status = db->Put(woptions, key, Slice(valuebuf, update_value_size));
+		  sassert(status.ok());
+		  result.ycsbdata += keylen + op->param;
+		  //result.kvdata += 2 * (keylen + value.length());
+		  result.kvdata += keylen + update_value_size;
+		  result.ycsb_u++;
+		  result.kv_g++;
+		  result.kv_p++;
+	  } else if (op->cmd == 's') {
+		  // op->param refers to the number of records to scan.
+		  int retrieved = 0;
+		  result.kv_itseek++;
+		  Iterator *it;
+		  it = db->NewIterator(ReadOptions());
+		  int required = op->param;
+		  //  required = 1;
+		  for (it->Seek(key); it->Valid() && retrieved < required; it->Next()) {
+			  if (!it->status().ok())
+				  std::cerr << "\n\n" << it->status().ToString() << "\n\n";
+			  assert(it->status().ok());
+				
+			  // Actually retrieving the key and the value, since
+			  // that might incur disk reads.
+			  unsigned long retvlen = it->value().ToString().length();
+			  unsigned long retklen = it->key().ToString().length();
+			  result.ycsbdata += retklen + retvlen;
+			  result.kvdata += retklen + retvlen;
+				
+			  result.kv_itnext++;
+			  retrieved ++;
+		  }
+		  delete it;
+		  result.ycsb_s++;
+	  } else {
+		  assert(false);
+	  }
+  }
+	
+  #define envinput(var, type) {assert(getenv(#var)); int ret = sscanf(getenv(#var), type, &var); assert(ret == 1);}
+	  #define envstrinput(var) strcpy(var, getenv(#var))
+	
+  void YCSB(ThreadState* thread) {
+	  int tid = thread->tid;
+	  char trace_file[1000];
+		
+	  envstrinput(trace_file);
+		
+	  parse_trace(trace_file, tid);
+		
+	  struct rlimit rlim;
+	  rlim.rlim_cur = 1000000;
+	  rlim.rlim_max = 1000000;
+	  int ret;// = setrlimit(RLIMIT_NOFILE, &rlim);
+	  //assert(ret == 0);
+			
+	  struct trace_operation_t *curop = trace_ops[tid];
+	  unsigned long long total_ops = 0;
+	  struct timeval start, end;
+		
+	  printf("Thread %d: Replaying trace ...\n", tid);
+		
+	  gettimeofday(&start, NULL);
+	  fprintf(stderr, "\nCompleted 0 ops");
+	  fflush(stderr);
+	  while(curop->cmd) {
+		  perform_op(db_, curop, tid);
+		  thread->stats.FinishedSingleOp();
+		  curop++;
+		  total_ops++;
+		  //if (total_ops % 10000 == 0) {
+		  //fprintf(stderr, "\rCompleted %llu ops", total_ops);
+		  //}
+	  }
+	  PrintStats("leveldb.stats");
+	  fprintf(stderr, "\r");
+	  ret = gettimeofday(&end, NULL);
+	  double secs = (end.tv_sec - start.tv_sec) + double(end.tv_usec - start.tv_usec) / 1000000;
+		
+	  struct result_t& result = results[tid];
+	  printf("\n\nThread %d: Done replaying %llu operations.\n", tid, total_ops);
+	  unsigned long long splitup_ops = print_splitup(tid);
+	  assert(splitup_ops == total_ops);
+	  printf("Thread %d: Time taken = %0.3lf seconds\n", tid, secs);
+	  printf("Thread %d: Total data: YCSB = %0.6lf GB, HyperLevelDB = %0.6lf GB\n", tid,
+		 double(result.ycsbdata) / 1024.0 / 1024.0 / 1024.0,
+		 double(result.kvdata) / 1024.0 / 1024.0 / 1024.0);
+	  printf("Thread %d: Ops/s = %0.3lf Kops/s\n", tid, double(total_ops) / 1024.0 / secs);
+		
+	  double throughput = double(result.ycsbdata) / secs;
+	  printf("Thread %d: YCSB throughput = %0.6lf MB/s\n", tid, throughput / 1024.0 / 1024.0);
+	  throughput = double(result.kvdata) / secs;
+	  printf("Thread %d: HyperLevelDB throughput = %0.6lf MB/s\n", tid, throughput / 1024.0 / 1024.0);
+  }
+	
+  void print_current_db_contents() {
+	  std::string current_db_state;
+	  printf("----------------------Current DB state-----------------------\n");
+	  if (db_ == NULL) {
+		  printf("db_ is NULL !!\n");
+		  return;
+	  }
+	  //db_->GetCurrentVersionState(&current_db_state);
+	  printf("%s\n", current_db_state.c_str());
+	  printf("-------------------------------------------------------------\n");
+  }
+	
   void Run() {
     PrintHeader();
     Open();
@@ -457,7 +759,9 @@ class Benchmark {
       bool fresh_db = false;
       int num_threads = FLAGS_threads;
 
-      if (name == Slice("open")) {
+      if (name == Slice("ycsb")) {
+	method = &Benchmark::YCSB;
+      } else if (name == Slice("open")) {
         method = &Benchmark::OpenBench;
         num_ /= 10000;
         if (num_ < 1) num_ = 1;
@@ -484,6 +788,9 @@ class Benchmark {
         num_ /= 1000;
         value_size_ = 100 * 1000;
         method = &Benchmark::WriteRandom;
+      } else if (name == Slice("reopen")) {
+	fresh_db = false;
+	method = &Benchmark::Reopen;
       } else if (name == Slice("readseq")) {
         method = &Benchmark::ReadSequential;
       } else if (name == Slice("readreverse")) {
@@ -506,6 +813,9 @@ class Benchmark {
       } else if (name == Slice("readwhilewriting")) {
         num_threads++;  // Add extra thread for writing
         method = &Benchmark::ReadWhileWriting;
+      } else if (name == Slice("seekwhilewriting")) {
+	num_threads++;
+	method = &Benchmark::SeekWhileWriting;
       } else if (name == Slice("compact")) {
         method = &Benchmark::Compact;
       } else if (name == Slice("crc32c")) {
@@ -522,6 +832,9 @@ class Benchmark {
         PrintStats("leveldb.stats");
       } else if (name == Slice("sstables")) {
         PrintStats("leveldb.sstables");
+      } else if (name == Slice("printdb")) {
+	fresh_db = false;
+	method = &Benchmark::PrintDB;
       } else {
         if (name != Slice()) {  // No error message for empty name
           fprintf(stderr, "unknown benchmark '%s'\n", name.ToString().c_str());
@@ -729,15 +1042,34 @@ class Benchmark {
     }
   }
 
+  void PrintDB(ThreadState* thread) {
+	  print_current_db_contents();
+  }
+	
+  void Reopen(ThreadState* thread) {
+	  //printf("Database before reopening -- \n");
+	  //print_current_db_contents();
+	  printf("Reopening database . . \n");
+	  TryReopen();
+	  //printf("Database after reopening -- \n");
+	  //print_current_db_contents();
+	  //printf("Sleeping for sometime for background compaction to complete . . \n");
+	  //Env::Default()->SleepForMicroseconds(10000000);
+	  //print_current_db_contents();
+  }
+	
   void WriteSeq(ThreadState* thread) {
+	  printf("%s: calling DoWrite\n", __func__);
     DoWrite(thread, true);
   }
 
   void WriteRandom(ThreadState* thread) {
+	  printf("%s: calling DoWrite\n", __func__);
     DoWrite(thread, false);
   }
 
   void DoWrite(ThreadState* thread, bool seq) {
+    uint64_t before, after, before_g, after_g;
     if (num_ != FLAGS_num) {
       char msg[100];
       snprintf(msg, sizeof(msg), "(%d ops)", num_);
@@ -748,12 +1080,15 @@ class Benchmark {
     WriteBatch batch;
     Status s;
     int64_t bytes = 0;
+    micros(before_g);
     for (int i = 0; i < num_; i += entries_per_batch_) {
       batch.Clear();
       for (int j = 0; j < entries_per_batch_; j++) {
-        const int k = seq ? i+j : (thread->rand.Next() % FLAGS_num);
+	      //printf("%s: calling Next\n", __func__);
+	const int k = seq ? i+j : (thread->rand.Next() % FLAGS_num);
         char key[100];
         snprintf(key, sizeof(key), "%016d", k);
+	//printf("%s: key is %s\n", __func__, key);
         batch.Put(key, gen.Generate(value_size_));
         bytes += value_size_ + strlen(key);
         thread->stats.FinishedSingleOp();
@@ -765,6 +1100,8 @@ class Benchmark {
       }
     }
     thread->stats.AddBytes(bytes);
+    micros(after_g);
+    print_timer_info("DoWrite() method :: Total time", before_g, after_g);
   }
 
   void ReadSequential(ThreadState* thread) {
@@ -794,9 +1131,11 @@ class Benchmark {
   }
 
   void ReadRandom(ThreadState* thread) {
+    uint64_t a, b, start, end;
     ReadOptions options;
     std::string value;
     int found = 0;
+    micros(start);
     for (int i = 0; i < reads_; i++) {
       char key[100];
       const int k = thread->rand.Next() % FLAGS_num;
@@ -808,6 +1147,8 @@ class Benchmark {
     }
     char msg[100];
     snprintf(msg, sizeof(msg), "(%d of %d found)", found, num_);
+    micros(end);
+    print_timer_info("ReadRandom :: Total time taken to read all entries", start, end);
     thread->stats.AddMessage(msg);
   }
 
@@ -837,8 +1178,10 @@ class Benchmark {
   }
 
   void SeekRandom(ThreadState* thread) {
+    uint64_t a, b, c, d, e;  
     ReadOptions options;
     int found = 0;
+    micros(a);
     for (int i = 0; i < reads_; i++) {
       Iterator* iter = db_->NewIterator(options);
       char key[100];
@@ -851,6 +1194,8 @@ class Benchmark {
     }
     char msg[100];
     snprintf(msg, sizeof(msg), "(%d of %d found)", found, num_);
+    micros(b);
+    print_timer_info("SeekRandom :: Total time taken to seek N random values", a, b);
     thread->stats.AddMessage(msg);
   }
 
@@ -883,6 +1228,37 @@ class Benchmark {
     DoDelete(thread, false);
   }
 
+
+  void SeekWhileWriting(ThreadState* thread) {
+	  if (thread->tid > 0) {
+		  SeekRandom(thread);
+	  } else {
+		  // Special thread that keeps writing until other threads are done.
+		  RandomGenerator gen;
+		  while (true) {
+			  {
+				  MutexLock l(&thread->shared->mu);
+				  if (thread->shared->num_done + 1 >= thread->shared->num_initialized) {
+					  // Other threads have finished
+					  break;
+				  }
+			  }
+				
+			  const int k = thread->rand.Next() % FLAGS_num;
+			  char key[100];
+			  snprintf(key, sizeof(key), "%016d", k);
+			  Status s = db_->Put(write_options_, key, gen.Generate(value_size_));
+			  if (!s.ok()) {
+				  fprintf(stderr, "put error: %s\n", s.ToString().c_str());
+				  exit(1);
+			  }
+		  }
+			
+		  // Do not count any of the preceding work/delay in stats.
+		  thread->stats.Start();
+	  }
+  }
+	
   void ReadWhileWriting(ThreadState* thread) {
     if (thread->tid > 0) {
       ReadRandom(thread);
@@ -933,6 +1309,7 @@ class Benchmark {
     char fname[100];
     snprintf(fname, sizeof(fname), "%s/heap-%04d", FLAGS_db, ++heap_counter_);
     WritableFile* file;
+    printf("%s: Creating log file\n", __func__);
     Status s = g_env->NewWritableFile(fname, &file);
     if (!s.ok()) {
       fprintf(stderr, "%s\n", s.ToString().c_str());

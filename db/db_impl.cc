@@ -11,6 +11,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <iostream>
 
 #include "db/builder.h"
 #include "db/db_iter.h"
@@ -186,10 +187,12 @@ Status DBImpl::NewDB() {
 
   const std::string manifest = DescriptorFileName(dbname_, 1);
   WritableFile* file;
+
   Status s = env_->NewWritableFile(manifest, &file);
   if (!s.ok()) {
     return s;
   }
+  
   {
     log::Writer log(file);
     std::string record;
@@ -206,6 +209,7 @@ Status DBImpl::NewDB() {
   } else {
     env_->DeleteFile(manifest);
   }
+
   return s;
 }
 
@@ -310,6 +314,7 @@ Status DBImpl::Recover(VersionEdit* edit, bool *save_manifest) {
   if (!s.ok()) {
     return s;
   }
+
   SequenceNumber max_sequence(0);
 
   // Recover from all newer log files than the ones named in the
@@ -565,6 +570,7 @@ void DBImpl::CompactMemTable() {
     has_imm_.Release_Store(nullptr);
     DeleteObsoleteFiles();
   } else {
+	  printf("%s: recording background error\n", __func__);
     RecordBackgroundError(s);
   }
 }
@@ -724,6 +730,7 @@ void DBImpl::BackgroundCompaction() {
     // Move file to next level
     assert(c->num_input_files(0) == 1);
     FileMetaData* f = c->input(0, 0);
+    //printf("%s: calling DeleteFile and AddFile with number = %d\n", __func__, f->number);
     c->edit()->DeleteFile(c->level(), f->number);
     c->edit()->AddFile(c->level() + 1, f->number, f->file_size,
                        f->smallest, f->largest);
@@ -809,6 +816,8 @@ Status DBImpl::OpenCompactionOutputFile(CompactionState* compact) {
 
   // Make the output file
   std::string fname = TableFileName(dbname_, file_number);
+  //printf("%s: creating new output file of name :: %s, file number = %llu\n", __func__, fname.c_str(), file_number);
+  //fflush(NULL);
   Status s = env_->NewWritableFile(fname, &compact->outfile);
   if (s.ok()) {
     compact->builder = new TableBuilder(options_, compact->outfile);
@@ -831,6 +840,7 @@ Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
   if (s.ok()) {
     s = compact->builder->Finish();
   } else {
+	  printf("%s: status not okay. NumEntries = %llu, output file number = %llu\n", __func__, current_entries, output_number);
     compact->builder->Abandon();
   }
   const uint64_t current_bytes = compact->builder->FileSize();
@@ -841,7 +851,7 @@ Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
 
   // Finish and check for file errors
   if (s.ok()) {
-    s = compact->outfile->Sync();
+   s = compact->outfile->Sync();
   }
   if (s.ok()) {
     s = compact->outfile->Close();
@@ -913,6 +923,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   mutex_.Unlock();
 
   Iterator* input = versions_->MakeInputIterator(compact->compaction);
+  //printf("%s: seek to first\n", __func__);
   input->SeekToFirst();
   Status status;
   ParsedInternalKey ikey;
@@ -926,9 +937,9 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
       mutex_.Lock();
       if (imm_ != nullptr) {
         CompactMemTable();
-        // Wake up MakeRoomForWrite() if necessary.
+	// Wake up MakeRoomForWrite() if necessary.
         background_work_finished_signal_.SignalAll();
-      }
+      } 
       mutex_.Unlock();
       imm_micros += (env_->NowMicros() - imm_start);
     }
@@ -938,7 +949,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
         compact->builder != nullptr) {
       status = FinishCompactionOutputFile(compact, input);
       if (!status.ok()) {
-        break;
+	break;
       }
     }
 
@@ -984,15 +995,15 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
         ikey.user_key.ToString().c_str(),
         (int)ikey.sequence, ikey.type, kTypeValue, drop,
         compact->compaction->IsBaseLevelForKey(ikey.user_key),
-        (int)last_sequence_for_key, (int)compact->smallest_snapshot);
+        (int)last_sequence_for_key, (int)compact->smallest_snapshot);    
 #endif
-
+    
     if (!drop) {
       // Open output file if necessary
       if (compact->builder == nullptr) {
         status = OpenCompactionOutputFile(compact);
         if (!status.ok()) {
-          break;
+		break;
         }
       }
       if (compact->builder->NumEntries() == 0) {
@@ -1006,11 +1017,12 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
           compact->compaction->MaxOutputFileSize()) {
         status = FinishCompactionOutputFile(compact, input);
         if (!status.ok()) {
-          break;
+		break;
         }
       }
     }
 
+    //printf("%s: going to next\n", __func__);
     input->Next();
   }
 
@@ -1022,7 +1034,8 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
   }
   if (status.ok()) {
     status = input->status();
-  }
+  } else
+
   delete input;
   input = nullptr;
 
@@ -1044,7 +1057,7 @@ Status DBImpl::DoCompactionWork(CompactionState* compact) {
     status = InstallCompactionResults(compact);
   }
   if (!status.ok()) {
-    RecordBackgroundError(status);
+	  RecordBackgroundError(status);
   }
   VersionSet::LevelSummaryStorage tmp;
   Log(options_.info_log,
@@ -1120,6 +1133,9 @@ Status DBImpl::Get(const ReadOptions& options,
   Status s;
   MutexLock l(&mutex_);
   SequenceNumber snapshot;
+  instrumentation_type memtable_time, imm_memtable_time, db_read_time;
+  int started_immtable = 0, started_memtable = 0;
+
   if (options.snapshot != nullptr) {
     snapshot =
         static_cast<const SnapshotImpl*>(options.snapshot)->sequence_number();
@@ -1142,23 +1158,45 @@ Status DBImpl::Get(const ReadOptions& options,
     mutex_.Unlock();
     // First look in the memtable, then in the immutable memtable (if any).
     LookupKey lkey(key, snapshot);
-    if (mem->Get(lkey, value, &s)) {
+
+    START_TIMING(memtable_t, memtable_time);
+    started_memtable = 1;
+    if(mem->Get(lkey, value, &s)) {
+	END_TIMING(memtable_t, memtable_time);
       // Done
-    } else if (imm != nullptr && imm->Get(lkey, value, &s)) {
-      // Done
+    } else if (imm != nullptr) {
+	    END_TIMING(memtable_t, memtable_time);
+	    started_memtable = 0;
+	    started_immtable = 1;
+	    START_TIMING(imm_memtable_t, imm_memtable_time);
+	    if(imm->Get(lkey, value, &s)) {
+		END_TIMING(imm_memtable_t, imm_memtable_time);    
+	      // Done
+	    }
     } else {
+	    
+      if(started_memtable)
+	  END_TIMING(memtable_t, memtable_time);
+      if(started_immtable)
+	  END_TIMING(imm_memtable_t, imm_memtable_time);
+	    
+      //START_TIMING(db_read_t, db_read_time);
       s = current->Get(options, lkey, value, &stats);
+      //END_TIMING(db_read_t, db_read_time);
+      started_memtable = 0;
+      started_immtable = 0;
       have_stat_update = true;
     }
     mutex_.Lock();
   }
 
   if (have_stat_update && current->UpdateStats(stats)) {
-    MaybeScheduleCompaction();
-  }
+      MaybeScheduleCompaction();
+  } 
   mem->Unref();
   if (imm != nullptr) imm->Unref();
   current->Unref();
+
   return s;
 }
 
@@ -1233,7 +1271,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
       status = log_->AddRecord(WriteBatchInternal::Contents(updates));
       bool sync_error = false;
       if (status.ok() && options.sync) {
-        status = logfile_->Sync();
+	  status = logfile_->Sync();
         if (!status.ok()) {
           sync_error = true;
         }
@@ -1246,7 +1284,7 @@ Status DBImpl::Write(const WriteOptions& options, WriteBatch* my_batch) {
         // The state of the log file is indeterminate: the log record we
         // just added may or may not show up when the DB is re-opened.
         // So we force the DB into a mode where all future writes fail.
-        RecordBackgroundError(status);
+	      RecordBackgroundError(status);
       }
     }
     if (updates == tmp_batch_) tmp_batch_->Clear();
@@ -1332,6 +1370,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
   Status s;
   while (true) {
     if (!bg_error_.ok()) {
+	    printf("%s: in bg error\n", __func__);
       // Yield previous error
       s = bg_error_;
       break;
@@ -1350,16 +1389,18 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       mutex_.Lock();
     } else if (!force &&
                (mem_->ApproximateMemoryUsage() <= options_.write_buffer_size)) {
-      // There is room in current memtable
+
+	    // There is room in current memtable
       break;
     } else if (imm_ != nullptr) {
+
       // We have filled up the current memtable, but the previous
       // one is still being compacted, so we wait.
       Log(options_.info_log, "Current memtable full; waiting...\n");
       background_work_finished_signal_.Wait();
     } else if (versions_->NumLevelFiles(0) >= config::kL0_StopWritesTrigger) {
       // There are too many level-0 files.
-      Log(options_.info_log, "Too many L0 files; waiting...\n");
+	    Log(options_.info_log, "Too many L0 files; waiting...\n");
       background_work_finished_signal_.Wait();
     } else {
       // Attempt to switch to a new memtable and trigger compaction of old
@@ -1368,7 +1409,7 @@ Status DBImpl::MakeRoomForWrite(bool force) {
       WritableFile* lfile = nullptr;
       s = env_->NewWritableFile(LogFileName(dbname_, new_log_number), &lfile);
       if (!s.ok()) {
-        // Avoid chewing through file number space in a tight loop.
+	// Avoid chewing through file number space in a tight loop.
         versions_->ReuseFileNumber(new_log_number);
         break;
       }
@@ -1411,6 +1452,7 @@ bool DBImpl::GetProperty(const Slice& property, std::string* value) {
       return true;
     }
   } else if (in == "stats") {
+    PRINT_TIME();
     char buf[200];
     snprintf(buf, sizeof(buf),
              "                               Compactions\n"
@@ -1502,6 +1544,7 @@ Status DB::Open(const Options& options, const std::string& dbname,
   *dbptr = nullptr;
 
   DBImpl* impl = new DBImpl(options, dbname);
+  INITIALIZE_TIMERS();
   impl->mutex_.Lock();
   VersionEdit edit;
   // Recover handles create_if_missing, error_if_exists

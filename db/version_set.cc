@@ -42,7 +42,7 @@ static double MaxBytesForLevel(const Options* options, int level) {
   // the level-0 compaction threshold based on number of files.
 
   // Result for both level-0 and level-1
-  double result = 10. * 1048576.0;
+  double result = 10.0 * 1048576.0;
   while (level > 1) {
     result *= 10;
     level--;
@@ -337,7 +337,8 @@ Status Version::Get(const ReadOptions& options,
   Slice user_key = k.user_key();
   const Comparator* ucmp = vset_->icmp_.user_comparator();
   Status s;
-
+  instrumentation_type getting_files_time, after_getting_files_time;
+  
   stats->seek_file = nullptr;
   stats->seek_file_level = -1;
   FileMetaData* last_file_read = nullptr;
@@ -348,7 +349,9 @@ Status Version::Get(const ReadOptions& options,
   // in an smaller level, later levels are irrelevant.
   std::vector<FileMetaData*> tmp;
   FileMetaData* tmp2;
+
   for (int level = 0; level < config::kNumLevels; level++) {
+    START_TIMING(get_files_t, getting_files_time);
     size_t num_files = files_[level].size();
     if (num_files == 0) continue;
 
@@ -389,6 +392,10 @@ Status Version::Get(const ReadOptions& options,
       }
     }
 
+    END_TIMING(get_files_t, getting_files_time);
+
+    START_TIMING(after_get_files_t, after_getting_files_time);
+
     for (uint32_t i = 0; i < num_files; ++i) {
       if (last_file_read != nullptr && stats->seek_file == nullptr) {
         // We have had more than one seek for this read.  Charge the 1st file.
@@ -414,15 +421,19 @@ Status Version::Get(const ReadOptions& options,
         case kNotFound:
           break;      // Keep searching in other files
         case kFound:
-          return s;
+	  END_TIMING(after_get_files_t, after_getting_files_time);
+	  return s;
         case kDeleted:
           s = Status::NotFound(Slice());  // Use empty error message for speed
+	  END_TIMING(after_get_files_t, after_getting_files_time);
           return s;
         case kCorrupt:
           s = Status::Corruption("corrupted key for ", user_key);
+	  END_TIMING(after_get_files_t, after_getting_files_time);
           return s;
       }
     }
+    END_TIMING(after_get_files_t, after_getting_files_time);
   }
 
   return Status::NotFound(Slice());  // Use an empty error message for speed
@@ -918,7 +929,7 @@ Status VersionSet::Recover(bool *save_manifest) {
     return s;
   }
   if (current.empty() || current[current.size()-1] != '\n') {
-    return Status::Corruption("CURRENT file does not end with newline");
+	  return Status::Corruption("CURRENT file does not end with newline");
   }
   current.resize(current.size() - 1);
 
@@ -1275,9 +1286,11 @@ Iterator* VersionSet::MakeInputIterator(Compaction* c) {
     if (!c->inputs_[which].empty()) {
       if (c->level() + which == 0) {
         const std::vector<FileMetaData*>& files = c->inputs_[which];
-        for (size_t i = 0; i < files.size(); i++) {
+	//printf("%s: files.size() = %d\n", __func__, files.size());
+	for (size_t i = 0; i < files.size(); i++) {
           list[num++] = table_cache_->NewIterator(
               options, files[i]->number, files[i]->file_size);
+	  //printf("%s: files[i]->number = %llu, files[i]->file_size = %llu\n", __func__, files[i]->number, files[i]->file_size);
         }
       } else {
         // Create concatenating iterator for the files from this level
@@ -1288,7 +1301,9 @@ Iterator* VersionSet::MakeInputIterator(Compaction* c) {
     }
   }
   assert(num <= space);
+  //printf("%s: getting NewMergingIterator\n", __func__);
   Iterator* result = NewMergingIterator(&icmp_, list, num);
+  //printf("%s: got NewMergingIterator\n", __func__);
   delete[] list;
   return result;
 }

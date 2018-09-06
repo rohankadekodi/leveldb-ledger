@@ -27,12 +27,13 @@
 #include "util/mutexlock.h"
 #include "util/posix_logger.h"
 #include "util/env_posix_test_helper.h"
+#include "util/timers.h"
 
 // HAVE_FDATASYNC is defined in the auto-generated port_config.h, which is
 // included by port_stdcxx.h.
-#if !HAVE_FDATASYNC
+//#if !HAVE_FDATASYNC
 #define fdatasync fsync
-#endif  // !HAVE_FDATASYNC
+//#endif  // !HAVE_FDATASYNC
 
 namespace leveldb {
 
@@ -165,24 +166,37 @@ class PosixRandomAccessFile: public RandomAccessFile {
   virtual Status Read(uint64_t offset, size_t n, Slice* result,
                       char* scratch) const {
     int fd = fd_;
+    instrumentation_type file_open_during_read_time, file_close_during_read_time, file_read_time;
+    
+    START_TIMING(db_open_read_t, file_open_during_read_time);
     if (temporary_fd_) {
       fd = open(filename_.c_str(), O_RDONLY);
       if (fd < 0) {
         return PosixError(filename_, errno);
       }
     }
-
+    END_TIMING(db_open_read_t, file_open_during_read_time);
+    
     Status s;
-    ssize_t r = pread(fd, scratch, n, static_cast<off_t>(offset));
+    //printf("%s: calling pread on fd = %d, size = %lu, offset = %lu\n", __func__, fd, n, static_cast<off_t>(offset));
+
+    START_TIMING(db_read_t, file_read_time);
+    ssize_t r = pread64(fd, scratch, n, static_cast<off_t>(offset));
+    END_TIMING(db_read_t, file_read_time);
+    
     *result = Slice(scratch, (r < 0) ? 0 : r);
     if (r < 0) {
       // An error: return a non-ok status
       s = PosixError(filename_, errno);
     }
+
+    START_TIMING(db_close_read_t, file_close_during_read_time);
     if (temporary_fd_) {
       // Close the temporary file descriptor opened earlier.
       close(fd);
     }
+    END_TIMING(db_close_read_t, file_close_during_read_time);
+
     return s;
   }
 };
@@ -409,13 +423,14 @@ class PosixEnv : public Env {
     *result = nullptr;
     Status s;
     int fd = open(fname.c_str(), O_RDONLY);
+    //printf("%s: filename = %s, fd = %d\n", __func__, fname.c_str(), fd);
     if (fd < 0) {
       s = PosixError(fname, errno);
-    } else if (mmap_limit_.Acquire()) {
+    } else if (false && mmap_limit_.Acquire()) {
       uint64_t size;
       s = GetFileSize(fname, &size);
       if (s.ok()) {
-        void* base = mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, 0);
+	      void* base = mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, 0);
         if (base != MAP_FAILED) {
           *result = new PosixMmapReadableFile(fname, base, size, &mmap_limit_);
         } else {
@@ -435,7 +450,22 @@ class PosixEnv : public Env {
   virtual Status NewWritableFile(const std::string& fname,
                                  WritableFile** result) {
     Status s;
-    int fd = open(fname.c_str(), O_TRUNC | O_WRONLY | O_CREAT, 0644);
+    int fd;
+
+    //printf("%s: filename = %s\n", __func__, fname.c_str());
+    //printf("%s: filename[33] = %c\n", __func__, fname.c_str()[33]);
+    //printf("%s: filename = %s, max allowed size = %lu, length = %lu\n", __func__, fname.c_str(), fname.max_size(), fname.length());
+
+    if(fname.find("MANIFEST") != std::string::npos)
+	    //if(fname.length() > 32 && fname.c_str()[29] == 'M' && fname.c_str()[30] == 'A' && fname.c_str()[31] == 'N')
+	    fd = open(fname.c_str(), O_TRUNC | O_WRONLY | O_CREAT, 0644);
+    else {
+	    fd = open(fname.c_str(), O_TRUNC | O_RDWR | O_CREAT, 0644);
+	    //printf("%s: filename = %s, fd = %d\n", __func__, fname.c_str(), fd);
+    }
+
+    // printf("%s: created output file name = %s, fd = %d\n", __func__, fname.c_str(), fd);
+    
     if (fd < 0) {
       *result = nullptr;
       s = PosixError(fname, errno);
@@ -448,7 +478,8 @@ class PosixEnv : public Env {
   virtual Status NewAppendableFile(const std::string& fname,
                                    WritableFile** result) {
     Status s;
-    int fd = open(fname.c_str(), O_APPEND | O_WRONLY | O_CREAT, 0644);
+    int fd = open(fname.c_str(), O_APPEND | O_RDWR | O_CREAT, 0644);
+    //printf("%s: filename = %s, fd = %d\n", __func__, fname.c_str(), fd);
     if (fd < 0) {
       *result = nullptr;
       s = PosixError(fname, errno);
@@ -525,6 +556,7 @@ class PosixEnv : public Env {
     *lock = nullptr;
     Status result;
     int fd = open(fname.c_str(), O_RDWR | O_CREAT, 0644);
+    printf("%s: filename = %s, fd = %d\n", __func__, fname.c_str(), fd);
     if (fd < 0) {
       result = PosixError(fname, errno);
     } else if (!locks_.Insert(fname)) {
@@ -565,7 +597,7 @@ class PosixEnv : public Env {
       *result = env;
     } else {
       char buf[100];
-      snprintf(buf, sizeof(buf), "/tmp/leveldbtest-%d", int(geteuid()));
+      snprintf(buf, sizeof(buf), "/mnt/pmem_emul/leveldbtest-%d", int(geteuid()));
       *result = buf;
     }
     // Directory may already exist
@@ -596,7 +628,7 @@ class PosixEnv : public Env {
     gettimeofday(&tv, nullptr);
     return static_cast<uint64_t>(tv.tv_sec) * 1000000 + tv.tv_usec;
   }
-
+	
   virtual void SleepForMicroseconds(int micros) {
     usleep(micros);
   }

@@ -9,6 +9,7 @@
 #include "table/block.h"
 #include "util/coding.h"
 #include "util/crc32c.h"
+#include "util/timers.h"
 
 namespace leveldb {
 
@@ -72,10 +73,13 @@ Status ReadBlock(RandomAccessFile* file,
 
   // Read the block contents as well as the type/crc footer.
   // See table_builder.cc for the code that built this structure.
+  instrumentation_type db_read_time;
   size_t n = static_cast<size_t>(handle.size());
   char* buf = new char[n + kBlockTrailerSize];
   Slice contents;
+  //START_TIMING(db_read_t, db_read_time);
   Status s = file->Read(handle.offset(), n + kBlockTrailerSize, &contents, buf);
+  //END_TIMING(db_read_t, db_read_time);
   if (!s.ok()) {
     delete[] buf;
     return s;

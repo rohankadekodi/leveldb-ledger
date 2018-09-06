@@ -133,6 +133,7 @@ target_sources(leveldb
     "${PROJECT_SOURCE_DIR}/table/table.cc"
     "${PROJECT_SOURCE_DIR}/table/two_level_iterator.cc"
     "${PROJECT_SOURCE_DIR}/table/two_level_iterator.h"
+    "${PROJECT_SOURCE_DIR}/util/timers.cc"
     "${PROJECT_SOURCE_DIR}/util/arena.cc"
     "${PROJECT_SOURCE_DIR}/util/arena.h"
     "${PROJECT_SOURCE_DIR}/util/bloom.cc"

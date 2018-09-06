@@ -61,14 +61,15 @@ static inline const char* DecodeEntry(const char* p, const char* limit,
   if ((*shared | *non_shared | *value_length) < 128) {
     // Fast path: all three values are encoded in one byte each
     p += 3;
-  } else {
-    if ((p = GetVarint32Ptr(p, limit, shared)) == nullptr) return nullptr;
+  } else {	  
+    if ((p = GetVarint32Ptr(p, limit, shared)) == nullptr) return nullptr;    
     if ((p = GetVarint32Ptr(p, limit, non_shared)) == nullptr) return nullptr;
     if ((p = GetVarint32Ptr(p, limit, value_length)) == nullptr) return nullptr;
   }
 
   if (static_cast<uint32_t>(limit - p) < (*non_shared + *value_length)) {
-    return nullptr;
+	  printf("%s: returning null in the if condition at end: limit = %lu, p = %lu, non_shared = %lu, value_length = %lu\n", __func__, limit, p, *non_shared, *value_length);
+	  return nullptr;
   }
   return p;
 }
@@ -138,6 +139,7 @@ class Block::Iter : public Iterator {
 
   virtual void Next() {
     assert(Valid());
+    //printf("%s: calling ParseNextKey\n", __func__);
     ParseNextKey();
   }
 
@@ -158,7 +160,7 @@ class Block::Iter : public Iterator {
 
     SeekToRestartPoint(restart_index_);
     do {
-      // Loop until end of current entry hits the start of original entry
+	    // Loop until end of current entry hits the start of original entry
     } while (ParseNextKey() && NextEntryOffset() < original);
   }
 
@@ -175,7 +177,7 @@ class Block::Iter : public Iterator {
                                         data_ + restarts_,
                                         &shared, &non_shared, &value_length);
       if (key_ptr == nullptr || (shared != 0)) {
-        CorruptionError();
+	CorruptionError();
         return;
       }
       Slice mid_key(key_ptr, non_shared);
@@ -204,11 +206,13 @@ class Block::Iter : public Iterator {
 
   virtual void SeekToFirst() {
     SeekToRestartPoint(0);
+    //printf("%s: calling ParseNextKey\n", __func__);
     ParseNextKey();
   }
 
   virtual void SeekToLast() {
     SeekToRestartPoint(num_restarts_ - 1);
+    
     while (ParseNextKey() && NextEntryOffset() < restarts_) {
       // Keep skipping
     }
@@ -238,6 +242,7 @@ class Block::Iter : public Iterator {
     uint32_t shared, non_shared, value_length;
     p = DecodeEntry(p, limit, &shared, &non_shared, &value_length);
     if (p == nullptr || key_.size() < shared) {
+	    printf("%s: error here. key.size = %lu, shared = %lu\n", __func__, key_.size(), shared);
       CorruptionError();
       return false;
     } else {

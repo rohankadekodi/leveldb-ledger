@@ -1,0 +1,218 @@
+Determining if the function crc32c_value exists in the crc32c failed with the following output:
+Change Dir: /home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_929e8/fast"
+/usr/bin/make -f CMakeFiles/cmTC_929e8.dir/build.make CMakeFiles/cmTC_929e8.dir/build
+make[1]: Entering directory '/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_929e8.dir/CheckFunctionExists.c.o
+/usr/bin/cc   -DCHECK_FUNCTION_EXISTS=crc32c_value   -std=c11 -o CMakeFiles/cmTC_929e8.dir/CheckFunctionExists.c.o   -c /usr/local/share/cmake-3.12/Modules/CheckFunctionExists.c
+Linking C executable cmTC_929e8
+/usr/local/bin/cmake -E cmake_link_script CMakeFiles/cmTC_929e8.dir/link.txt --verbose=1
+/usr/bin/cc  -DCHECK_FUNCTION_EXISTS=crc32c_value    CMakeFiles/cmTC_929e8.dir/CheckFunctionExists.c.o  -o cmTC_929e8 -lcrc32c 
+/usr/bin/ld: cannot find -lcrc32c
+collect2: error: ld returned 1 exit status
+CMakeFiles/cmTC_929e8.dir/build.make:86: recipe for target 'cmTC_929e8' failed
+make[1]: *** [cmTC_929e8] Error 1
+make[1]: Leaving directory '/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp'
+Makefile:121: recipe for target 'cmTC_929e8/fast' failed
+make: *** [cmTC_929e8/fast] Error 2
+
+
+Determining if the function snappy_compress exists in the snappy failed with the following output:
+Change Dir: /home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_23b9f/fast"
+/usr/bin/make -f CMakeFiles/cmTC_23b9f.dir/build.make CMakeFiles/cmTC_23b9f.dir/build
+make[1]: Entering directory '/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_23b9f.dir/CheckFunctionExists.c.o
+/usr/bin/cc   -DCHECK_FUNCTION_EXISTS=snappy_compress   -std=c11 -o CMakeFiles/cmTC_23b9f.dir/CheckFunctionExists.c.o   -c /usr/local/share/cmake-3.12/Modules/CheckFunctionExists.c
+Linking C executable cmTC_23b9f
+/usr/local/bin/cmake -E cmake_link_script CMakeFiles/cmTC_23b9f.dir/link.txt --verbose=1
+/usr/bin/cc  -DCHECK_FUNCTION_EXISTS=snappy_compress    CMakeFiles/cmTC_23b9f.dir/CheckFunctionExists.c.o  -o cmTC_23b9f -lsnappy 
+/usr/bin/ld: cannot find -lsnappy
+collect2: error: ld returned 1 exit status
+CMakeFiles/cmTC_23b9f.dir/build.make:86: recipe for target 'cmTC_23b9f' failed
+make[1]: *** [cmTC_23b9f] Error 1
+make[1]: Leaving directory '/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp'
+Makefile:121: recipe for target 'cmTC_23b9f/fast' failed
+make: *** [cmTC_23b9f/fast] Error 2
+
+
+Determining if the function malloc exists in the tcmalloc failed with the following output:
+Change Dir: /home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_5cf68/fast"
+/usr/bin/make -f CMakeFiles/cmTC_5cf68.dir/build.make CMakeFiles/cmTC_5cf68.dir/build
+make[1]: Entering directory '/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_5cf68.dir/CheckFunctionExists.c.o
+/usr/bin/cc   -DCHECK_FUNCTION_EXISTS=malloc   -std=c11 -o CMakeFiles/cmTC_5cf68.dir/CheckFunctionExists.c.o   -c /usr/local/share/cmake-3.12/Modules/CheckFunctionExists.c
+<command-line>:0:23: warning: conflicting types for built-in function ‘malloc’
+/usr/local/share/cmake-3.12/Modules/CheckFunctionExists.c:7:3: note: in expansion of macro ‘CHECK_FUNCTION_EXISTS’
+   CHECK_FUNCTION_EXISTS(void);
+   ^
+Linking C executable cmTC_5cf68
+/usr/local/bin/cmake -E cmake_link_script CMakeFiles/cmTC_5cf68.dir/link.txt --verbose=1
+/usr/bin/cc  -DCHECK_FUNCTION_EXISTS=malloc    CMakeFiles/cmTC_5cf68.dir/CheckFunctionExists.c.o  -o cmTC_5cf68 -ltcmalloc 
+/usr/bin/ld: cannot find -ltcmalloc
+collect2: error: ld returned 1 exit status
+CMakeFiles/cmTC_5cf68.dir/build.make:86: recipe for target 'cmTC_5cf68' failed
+make[1]: *** [cmTC_5cf68] Error 1
+make[1]: Leaving directory '/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp'
+Makefile:121: recipe for target 'cmTC_5cf68/fast' failed
+make: *** [cmTC_5cf68/fast] Error 2
+
+
+Determining if the fdatasync exist failed with the following output:
+Change Dir: /home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_220ec/fast"
+/usr/bin/make -f CMakeFiles/cmTC_220ec.dir/build.make CMakeFiles/cmTC_220ec.dir/build
+make[1]: Entering directory '/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_220ec.dir/CheckSymbolExists.c.o
+/usr/bin/cc   -std=c11 -o CMakeFiles/cmTC_220ec.dir/CheckSymbolExists.c.o   -c /home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c
+/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c: In function ‘main’:
+/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c:8:19: error: ‘fdatasync’ undeclared (first use in this function)
+   return ((int*)(&fdatasync))[argc];
+                   ^
+/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c:8:19: note: each undeclared identifier is reported only once for each function it appears in
+CMakeFiles/cmTC_220ec.dir/build.make:65: recipe for target 'CMakeFiles/cmTC_220ec.dir/CheckSymbolExists.c.o' failed
+make[1]: *** [CMakeFiles/cmTC_220ec.dir/CheckSymbolExists.c.o] Error 1
+make[1]: Leaving directory '/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp'
+Makefile:121: recipe for target 'cmTC_220ec/fast' failed
+make: *** [cmTC_220ec/fast] Error 2
+
+File /home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c:
+/* */
+#include <unistd.h>
+
+int main(int argc, char** argv)
+{
+  (void)argv;
+#ifndef fdatasync
+  return ((int*)(&fdatasync))[argc];
+#else
+  (void)argc;
+  return 0;
+#endif
+}
+
+Performing C++ SOURCE FILE Test HAVE_CLANG_THREAD_SAFETY failed with the following output:
+Change Dir: /home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_c0ee7/fast"
+/usr/bin/make -f CMakeFiles/cmTC_c0ee7.dir/build.make CMakeFiles/cmTC_c0ee7.dir/build
+make[1]: Entering directory '/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp'
+Building CXX object CMakeFiles/cmTC_c0ee7.dir/src.cxx.o
+/usr/bin/c++    -DHAVE_CLANG_THREAD_SAFETY -Werror   -std=c++11 -o CMakeFiles/cmTC_c0ee7.dir/src.cxx.o -c /home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp/src.cxx
+/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp/src.cxx:2:34: error: ‘lockable’ attribute directive ignored [-Werror=attributes]
+ struct __attribute__((lockable)) Lock {
+                                  ^
+/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp/src.cxx:3:59: error: ‘exclusive_lock_function’ attribute directive ignored [-Werror=attributes]
+   void Acquire() __attribute__((exclusive_lock_function()));
+                                                           ^
+/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp/src.cxx:4:51: error: ‘unlock_function’ attribute directive ignored [-Werror=attributes]
+   void Release() __attribute__((unlock_function()));
+                                                   ^
+/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp/src.cxx:8:46: error: ‘guarded_by’ attribute directive ignored [-Werror=attributes]
+   int data_ __attribute__((guarded_by(lock_)));
+                                              ^
+cc1plus: all warnings being treated as errors
+CMakeFiles/cmTC_c0ee7.dir/build.make:65: recipe for target 'CMakeFiles/cmTC_c0ee7.dir/src.cxx.o' failed
+make[1]: *** [CMakeFiles/cmTC_c0ee7.dir/src.cxx.o] Error 1
+make[1]: Leaving directory '/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp'
+Makefile:121: recipe for target 'cmTC_c0ee7/fast' failed
+make: *** [cmTC_c0ee7/fast] Error 2
+
+Source file was:
+
+struct __attribute__((lockable)) Lock {
+  void Acquire() __attribute__((exclusive_lock_function()));
+  void Release() __attribute__((unlock_function()));
+};
+struct ThreadSafeType {
+  Lock lock_;
+  int data_ __attribute__((guarded_by(lock_)));
+};
+int main() { return 0; }
+
+Determining if the pthread_create exist failed with the following output:
+Change Dir: /home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_fa13d/fast"
+/usr/bin/make -f CMakeFiles/cmTC_fa13d.dir/build.make CMakeFiles/cmTC_fa13d.dir/build
+make[1]: Entering directory '/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_fa13d.dir/CheckSymbolExists.c.o
+/usr/bin/cc   -std=c11 -o CMakeFiles/cmTC_fa13d.dir/CheckSymbolExists.c.o   -c /home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c
+Linking C executable cmTC_fa13d
+/usr/local/bin/cmake -E cmake_link_script CMakeFiles/cmTC_fa13d.dir/link.txt --verbose=1
+/usr/bin/cc      CMakeFiles/cmTC_fa13d.dir/CheckSymbolExists.c.o  -o cmTC_fa13d 
+CMakeFiles/cmTC_fa13d.dir/CheckSymbolExists.c.o: In function `main':
+CheckSymbolExists.c:(.text+0x16): undefined reference to `pthread_create'
+collect2: error: ld returned 1 exit status
+CMakeFiles/cmTC_fa13d.dir/build.make:86: recipe for target 'cmTC_fa13d' failed
+make[1]: *** [cmTC_fa13d] Error 1
+make[1]: Leaving directory '/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp'
+Makefile:121: recipe for target 'cmTC_fa13d/fast' failed
+make: *** [cmTC_fa13d/fast] Error 2
+
+File /home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp/CheckSymbolExists.c:
+/* */
+#include <pthread.h>
+
+int main(int argc, char** argv)
+{
+  (void)argv;
+#ifndef pthread_create
+  return ((int*)(&pthread_create))[argc];
+#else
+  (void)argc;
+  return 0;
+#endif
+}
+
+Determining if the function pthread_create exists in the pthreads failed with the following output:
+Change Dir: /home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_c4d64/fast"
+/usr/bin/make -f CMakeFiles/cmTC_c4d64.dir/build.make CMakeFiles/cmTC_c4d64.dir/build
+make[1]: Entering directory '/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp'
+Building C object CMakeFiles/cmTC_c4d64.dir/CheckFunctionExists.c.o
+/usr/bin/cc   -DCHECK_FUNCTION_EXISTS=pthread_create   -std=c11 -o CMakeFiles/cmTC_c4d64.dir/CheckFunctionExists.c.o   -c /usr/local/share/cmake-3.12/Modules/CheckFunctionExists.c
+Linking C executable cmTC_c4d64
+/usr/local/bin/cmake -E cmake_link_script CMakeFiles/cmTC_c4d64.dir/link.txt --verbose=1
+/usr/bin/cc  -DCHECK_FUNCTION_EXISTS=pthread_create    CMakeFiles/cmTC_c4d64.dir/CheckFunctionExists.c.o  -o cmTC_c4d64 -lpthreads 
+/usr/bin/ld: cannot find -lpthreads
+collect2: error: ld returned 1 exit status
+CMakeFiles/cmTC_c4d64.dir/build.make:86: recipe for target 'cmTC_c4d64' failed
+make[1]: *** [cmTC_c4d64] Error 1
+make[1]: Leaving directory '/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp'
+Makefile:121: recipe for target 'cmTC_c4d64/fast' failed
+make: *** [cmTC_c4d64/fast] Error 2
+
+
+Performing C++ SOURCE FILE Test HAVE_KYOTOCABINET failed with the following output:
+Change Dir: /home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp
+
+Run Build Command:"/usr/bin/make" "cmTC_1ecd5/fast"
+/usr/bin/make -f CMakeFiles/cmTC_1ecd5.dir/build.make CMakeFiles/cmTC_1ecd5.dir/build
+make[1]: Entering directory '/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp'
+Building CXX object CMakeFiles/cmTC_1ecd5.dir/src.cxx.o
+/usr/bin/c++    -DHAVE_KYOTOCABINET   -std=c++11 -o CMakeFiles/cmTC_1ecd5.dir/src.cxx.o -c /home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp/src.cxx
+/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp/src.cxx:2:22: fatal error: kcpolydb.h: No such file or directory
+compilation terminated.
+CMakeFiles/cmTC_1ecd5.dir/build.make:65: recipe for target 'CMakeFiles/cmTC_1ecd5.dir/src.cxx.o' failed
+make[1]: *** [CMakeFiles/cmTC_1ecd5.dir/src.cxx.o] Error 1
+make[1]: Leaving directory '/home/rohan/projects/leveldb/build/CMakeFiles/CMakeTmp'
+Makefile:121: recipe for target 'cmTC_1ecd5/fast' failed
+make: *** [cmTC_1ecd5/fast] Error 2
+
+Source file was:
+
+#include <kcpolydb.h>
+
+int main() {
+  kyotocabinet::TreeDB* db = new kyotocabinet::TreeDB();
+  delete db;
+  return 0;
+}
+  

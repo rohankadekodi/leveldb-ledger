@@ -14,6 +14,7 @@
 #include "table/format.h"
 #include "table/two_level_iterator.h"
 #include "util/coding.h"
+#include "util/timers.h"
 
 namespace leveldb {
 
@@ -163,7 +164,8 @@ Iterator* Table::BlockReader(void* arg,
   Cache* block_cache = table->rep_->options.block_cache;
   Block* block = nullptr;
   Cache::Handle* cache_handle = nullptr;
-
+  instrumentation_type read_block_time, insert_block_cache_time, new_iterator_time;
+  
   BlockHandle handle;
   Slice input = index_value;
   Status s = handle.DecodeFrom(&input);
@@ -181,13 +183,20 @@ Iterator* Table::BlockReader(void* arg,
       if (cache_handle != nullptr) {
         block = reinterpret_cast<Block*>(block_cache->Value(cache_handle));
       } else {
-        s = ReadBlock(table->rep_->file, options, handle, &contents);
+
+	START_TIMING(read_block_t, read_block_time);
+	s = ReadBlock(table->rep_->file, options, handle, &contents);
+	END_TIMING(read_block_t, read_block_time);
         if (s.ok()) {
           block = new Block(contents);
+	  
+	  START_TIMING(insert_block_cache_t, insert_block_cache_time);
           if (contents.cachable && options.fill_cache) {
             cache_handle = block_cache->Insert(
                 key, block, block->size(), &DeleteCachedBlock);
           }
+	  END_TIMING(insert_block_cache_t, insert_block_cache_time);
+
         }
       }
     } else {
@@ -200,12 +209,16 @@ Iterator* Table::BlockReader(void* arg,
 
   Iterator* iter;
   if (block != nullptr) {
+	  
+    START_TIMING(new_iterator_t, new_iterator_time);
     iter = block->NewIterator(table->rep_->options.comparator);
     if (cache_handle == nullptr) {
       iter->RegisterCleanup(&DeleteBlock, block, nullptr);
     } else {
       iter->RegisterCleanup(&ReleaseBlock, block_cache, cache_handle);
     }
+    END_TIMING(new_iterator_t, new_iterator_time);
+
   } else {
     iter = NewErrorIterator(s);
   }
@@ -222,8 +235,12 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k,
                           void* arg,
                           void (*saver)(void*, const Slice&, const Slice&)) {
   Status s;
+  instrumentation_type block_reader_time;
   Iterator* iiter = rep_->index_block->NewIterator(rep_->options.comparator);
   iiter->Seek(k);
+
+  START_TIMING(block_reader_t, block_reader_time);
+
   if (iiter->Valid()) {
     Slice handle_value = iiter->value();
     FilterBlockReader* filter = rep_->filter;
@@ -242,6 +259,9 @@ Status Table::InternalGet(const ReadOptions& options, const Slice& k,
       delete block_iter;
     }
   }
+
+  END_TIMING(block_reader_t, block_reader_time);
+
   if (s.ok()) {
     s = iiter->status();
   }
