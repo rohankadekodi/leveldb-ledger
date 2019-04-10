@@ -356,19 +356,19 @@ class Benchmark {
   void PrintHeader() {
     const int kKeySize = 16;
     PrintEnvironment();
-    fprintf(stdout, "Keys:       %d bytes each\n", kKeySize);
-    fprintf(stdout, "Values:     %d bytes each (%d bytes after compression)\n",
+    fprintf(stderr, "Keys:       %d bytes each\n", kKeySize);
+    fprintf(stderr, "Values:     %d bytes each (%d bytes after compression)\n",
             FLAGS_value_size,
             static_cast<int>(FLAGS_value_size * FLAGS_compression_ratio + 0.5));
-    fprintf(stdout, "Entries:    %d\n", num_);
-    fprintf(stdout, "RawSize:    %.1f MB (estimated)\n",
+    fprintf(stderr, "Entries:    %d\n", num_);
+    fprintf(stderr, "RawSize:    %.1f MB (estimated)\n",
             ((static_cast<int64_t>(kKeySize + FLAGS_value_size) * num_)
              / 1048576.0));
-    fprintf(stdout, "FileSize:   %.1f MB (estimated)\n",
+    fprintf(stderr, "FileSize:   %.1f MB (estimated)\n",
             (((kKeySize + FLAGS_value_size * FLAGS_compression_ratio) * num_)
              / 1048576.0));
     PrintWarnings();
-    fprintf(stdout, "------------------------------------------------\n");
+    fprintf(stderr, "------------------------------------------------\n");
   }
 
   void PrintWarnings() {
@@ -386,9 +386,9 @@ class Benchmark {
     const char text[] = "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy";
     std::string compressed;
     if (!port::Snappy_Compress(text, sizeof(text), &compressed)) {
-      fprintf(stdout, "WARNING: Snappy compression is not enabled\n");
+      fprintf(stderr, "WARNING: Snappy compression is not enabled\n");
     } else if (compressed.size() >= sizeof(text)) {
-      fprintf(stdout, "WARNING: Snappy compression is not effective\n");
+      fprintf(stderr, "WARNING: Snappy compression is not effective\n");
     }
   }
 
@@ -491,13 +491,13 @@ class Benchmark {
 	
   unsigned long long print_splitup(int tid) {
 	  struct result_t& result = results[tid];
-	  printf("YCSB splitup: R = %llu, D = %llu, I = %llu, U = %llu, S = %llu\n",
+	  fprintf(stderr, "YCSB splitup: R = %llu, D = %llu, I = %llu, U = %llu, S = %llu\n",
 		 result.ycsb_r,
 		 result.ycsb_d,
 		 result.ycsb_i,
 		 result.ycsb_u,
 		 result.ycsb_s);
-	  printf("LevelDB/WiscKey splitup: P = %llu, G = %llu, D = %llu, ItSeek = %llu, ItNext = %llu\n",
+	  fprintf(stderr, "LevelDB/WiscKey splitup: P = %llu, G = %llu, D = %llu, ItSeek = %llu, ItNext = %llu\n",
 		 result.kv_p,
 		 result.kv_g,
 		 result.kv_d,
@@ -551,7 +551,7 @@ class Benchmark {
 		  corresponding_file = file_names[tid];
 	  }
 		
-	  printf("Thread %d: Parsing trace ...\n", tid);
+	  fprintf(stderr, "Thread %d: Parsing trace ...\n", tid);
 	  trace_ops[tid] = (struct trace_operation_t *) mmap(NULL, MAX_TRACE_OPS * sizeof(struct trace_operation_t), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
 	  if (trace_ops[tid] == MAP_FAILED)
 		  perror(NULL);
@@ -581,7 +581,7 @@ class Benchmark {
 		  curop++;
 		  total_ops++;
 	  }
-	  printf("Thread %d: Done parsing, %llu operations.\n", tid, total_ops);
+	  fprintf(stderr, "Thread %d: Done parsing, %llu operations.\n", tid, total_ops);
   }
 	
   char valuebuf[MAX_VALUE_SIZE];
@@ -685,7 +685,7 @@ class Benchmark {
 	  unsigned long long total_ops = 0;
 	  struct timeval start, end;
 		
-	  printf("Thread %d: Replaying trace ...\n", tid);
+	  fprintf(stderr, "Thread %d: Replaying trace ...\n", tid);
 		
 	  gettimeofday(&start, NULL);
 	  fprintf(stderr, "\nCompleted 0 ops");
@@ -705,31 +705,31 @@ class Benchmark {
 	  double secs = (end.tv_sec - start.tv_sec) + double(end.tv_usec - start.tv_usec) / 1000000;
 		
 	  struct result_t& result = results[tid];
-	  printf("\n\nThread %d: Done replaying %llu operations.\n", tid, total_ops);
+	  fprintf(stderr, "\n\nThread %d: Done replaying %llu operations.\n", tid, total_ops);
 	  unsigned long long splitup_ops = print_splitup(tid);
 	  assert(splitup_ops == total_ops);
-	  printf("Thread %d: Time taken = %0.3lf seconds\n", tid, secs);
-	  printf("Thread %d: Total data: YCSB = %0.6lf GB, HyperLevelDB = %0.6lf GB\n", tid,
+	  fprintf(stderr, "Thread %d: Time taken = %0.3lf seconds\n", tid, secs);
+	  fprintf(stderr, "Thread %d: Total data: YCSB = %0.6lf GB, HyperLevelDB = %0.6lf GB\n", tid,
 		 double(result.ycsbdata) / 1024.0 / 1024.0 / 1024.0,
 		 double(result.kvdata) / 1024.0 / 1024.0 / 1024.0);
-	  printf("Thread %d: Ops/s = %0.3lf Kops/s\n", tid, double(total_ops) / 1024.0 / secs);
+	  fprintf(stderr, "Thread %d: Ops/s = %0.3lf Kops/s\n", tid, double(total_ops) / 1024.0 / secs);
 		
 	  double throughput = double(result.ycsbdata) / secs;
-	  printf("Thread %d: YCSB throughput = %0.6lf MB/s\n", tid, throughput / 1024.0 / 1024.0);
+	  fprintf(stderr, "Thread %d: YCSB throughput = %0.6lf MB/s\n", tid, throughput / 1024.0 / 1024.0);
 	  throughput = double(result.kvdata) / secs;
-	  printf("Thread %d: HyperLevelDB throughput = %0.6lf MB/s\n", tid, throughput / 1024.0 / 1024.0);
+	  fprintf(stderr, "Thread %d: HyperLevelDB throughput = %0.6lf MB/s\n", tid, throughput / 1024.0 / 1024.0);
   }
 	
   void print_current_db_contents() {
 	  std::string current_db_state;
-	  printf("----------------------Current DB state-----------------------\n");
+	  fprintf(stderr, "----------------------Current DB state-----------------------\n");
 	  if (db_ == NULL) {
-		  printf("db_ is NULL !!\n");
+		  fprintf(stderr, "db_ is NULL !!\n");
 		  return;
 	  }
 	  //db_->GetCurrentVersionState(&current_db_state);
-	  printf("%s\n", current_db_state.c_str());
-	  printf("-------------------------------------------------------------\n");
+	  fprintf(stderr, "%s\n", current_db_state.c_str());
+	  fprintf(stderr, "-------------------------------------------------------------\n");
   }
 	
   void Run() {
@@ -1029,7 +1029,7 @@ class Benchmark {
     options.reuse_logs = FLAGS_reuse_logs;
     Status s = DB::Open(options, FLAGS_db, &db_);
     if (!s.ok()) {
-      fprintf(stderr, "open error: %s\n", s.ToString().c_str());
+      fprintf(stderr, "open error: (%s)\n", s.ToString().c_str());
       exit(1);
     }
   }
@@ -1049,7 +1049,7 @@ class Benchmark {
   void Reopen(ThreadState* thread) {
 	  //printf("Database before reopening -- \n");
 	  //print_current_db_contents();
-	  printf("Reopening database . . \n");
+	  fprintf(stderr, "Reopening database . . \n");
 	  TryReopen();
 	  //printf("Database after reopening -- \n");
 	  //print_current_db_contents();
@@ -1059,13 +1059,13 @@ class Benchmark {
   }
 	
   void WriteSeq(ThreadState* thread) {
-	  printf("%s: calling DoWrite\n", __func__);
-    DoWrite(thread, true);
+	  fprintf(stderr, "%s: calling DoWrite\n", __func__);
+	  DoWrite(thread, true);
   }
 
   void WriteRandom(ThreadState* thread) {
-	  printf("%s: calling DoWrite\n", __func__);
-    DoWrite(thread, false);
+	  fprintf(stderr, "%s: calling DoWrite\n", __func__);
+	  DoWrite(thread, false);
   }
 
   void DoWrite(ThreadState* thread, bool seq) {
@@ -1309,7 +1309,7 @@ class Benchmark {
     char fname[100];
     snprintf(fname, sizeof(fname), "%s/heap-%04d", FLAGS_db, ++heap_counter_);
     WritableFile* file;
-    printf("%s: Creating log file\n", __func__);
+    fprintf(stderr, "%s: Creating log file\n", __func__);
     Status s = g_env->NewWritableFile(fname, &file);
     if (!s.ok()) {
       fprintf(stderr, "%s\n", s.ToString().c_str());

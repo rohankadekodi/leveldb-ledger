@@ -310,7 +310,8 @@ class PosixWritableFile : public WritableFile {
       basename = sep + 1;
     }
     Status s;
-    if (basename.starts_with("MANIFEST")) {
+    if (basename.starts_with("MANIFEST")) {	    
+	    //fprintf(stderr, "%s: path for open = (%s)\n", __func__, dir.c_str());
       int fd = open(dir.c_str(), O_RDONLY);
       if (fd < 0) {
         s = PosixError(dir, errno);
@@ -408,6 +409,7 @@ class PosixEnv : public Env {
 
   virtual Status NewSequentialFile(const std::string& fname,
                                    SequentialFile** result) {
+	  //fprintf(stderr, "%s: path for open = (%s)\n", __func__, fname.c_str());
     int fd = open(fname.c_str(), O_RDONLY);
     if (fd < 0) {
       *result = nullptr;
@@ -422,8 +424,8 @@ class PosixEnv : public Env {
                                      RandomAccessFile** result) {
     *result = nullptr;
     Status s;
+    //fprintf(stderr, "%s: filename = (%s)\n", __func__, fname.c_str());
     int fd = open(fname.c_str(), O_RDONLY);
-    //printf("%s: filename = %s, fd = %d\n", __func__, fname.c_str(), fd);
     if (fd < 0) {
       s = PosixError(fname, errno);
     } else if (false && mmap_limit_.Acquire()) {
@@ -452,20 +454,14 @@ class PosixEnv : public Env {
     Status s;
     int fd;
 
-    //printf("%s: filename = %s\n", __func__, fname.c_str());
-    //printf("%s: filename[33] = %c\n", __func__, fname.c_str()[33]);
-    //printf("%s: filename = %s, max allowed size = %lu, length = %lu\n", __func__, fname.c_str(), fname.max_size(), fname.length());
-
-    if(fname.find("MANIFEST") != std::string::npos)
-	    //if(fname.length() > 32 && fname.c_str()[29] == 'M' && fname.c_str()[30] == 'A' && fname.c_str()[31] == 'N')
+    if(fname.find("MANIFEST") != std::string::npos) {
+	    //fprintf(stderr, "%s: path for open = (%s)\n", __func__, fname.c_str());
 	    fd = open(fname.c_str(), O_TRUNC | O_WRONLY | O_CREAT, 0644);
-    else {
+    } else {
+	    //fprintf(stderr, "%s: path for open = (%s)\n", __func__, fname.c_str());
 	    fd = open(fname.c_str(), O_TRUNC | O_RDWR | O_CREAT, 0644);
-	    //printf("%s: filename = %s, fd = %d\n", __func__, fname.c_str(), fd);
     }
 
-    // printf("%s: created output file name = %s, fd = %d\n", __func__, fname.c_str(), fd);
-    
     if (fd < 0) {
       *result = nullptr;
       s = PosixError(fname, errno);
@@ -478,8 +474,8 @@ class PosixEnv : public Env {
   virtual Status NewAppendableFile(const std::string& fname,
                                    WritableFile** result) {
     Status s;
+    //fprintf(stderr, "%s: filename = (%s)\n", __func__, fname.c_str());
     int fd = open(fname.c_str(), O_APPEND | O_RDWR | O_CREAT, 0644);
-    //printf("%s: filename = %s, fd = %d\n", __func__, fname.c_str(), fd);
     if (fd < 0) {
       *result = nullptr;
       s = PosixError(fname, errno);
@@ -555,8 +551,8 @@ class PosixEnv : public Env {
   virtual Status LockFile(const std::string& fname, FileLock** lock) {
     *lock = nullptr;
     Status result;
+    //fprintf(stderr, "%s: filename = (%s)\n", __func__, fname.c_str());
     int fd = open(fname.c_str(), O_RDWR | O_CREAT, 0644);
-    printf("%s: filename = %s, fd = %d\n", __func__, fname.c_str(), fd);
     if (fd < 0) {
       result = PosixError(fname, errno);
     } else if (!locks_.Insert(fname)) {

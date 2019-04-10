@@ -68,7 +68,7 @@ static inline const char* DecodeEntry(const char* p, const char* limit,
   }
 
   if (static_cast<uint32_t>(limit - p) < (*non_shared + *value_length)) {
-	  printf("%s: returning null in the if condition at end: limit = %lu, p = %lu, non_shared = %lu, value_length = %lu\n", __func__, limit, p, *non_shared, *value_length);
+	  fprintf(stderr, "%s: returning null in the if condition at end: limit = %lu, p = %lu, non_shared = %lu, value_length = %lu\n", __func__, limit, p, *non_shared, *value_length);
 	  return nullptr;
   }
   return p;
@@ -242,9 +242,9 @@ class Block::Iter : public Iterator {
     uint32_t shared, non_shared, value_length;
     p = DecodeEntry(p, limit, &shared, &non_shared, &value_length);
     if (p == nullptr || key_.size() < shared) {
-	    printf("%s: error here. key.size = %lu, shared = %lu\n", __func__, key_.size(), shared);
-      CorruptionError();
-      return false;
+	    fprintf(stderr, "%s: error here. key.size = %lu, shared = %lu\n", __func__, key_.size(), shared);
+	    CorruptionError();
+	    return false;
     } else {
       key_.resize(shared);
       key_.append(p, non_shared);

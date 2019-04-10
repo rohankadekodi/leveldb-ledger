@@ -15,15 +15,20 @@ ext4DAXResultsDir=/home/rohan/projects/ext4DAX/Results/YCSB
 scriptsDir=/home/rohan/projects/leveldb/scripts
 storingFileInfo=/home/rohan/projects/quill-modified/Results/YCSB
 pmemDir=/mnt/pmem_emul
-quillDir=/home/rohan/projects/quill-modified
+quillDir=/home/rohan/projects/quill-ycsb
+quillAnonDir=/home/rohan/projects/quill-anon/quill-modified
 quillSyscallsDir=/home/rohan/projects/quill-syscalls/quill-modified
-quillResultsDir=$quillDir/Results/YCSB
-quillSyscallsResultsDir=$quillSyscallsDir/Results/YCSB
+quillAnonResultsDir=/home/rohan/projects/ycsb_output/anon_ledger
+quillDRResultsDir=/home/rohan/projects/ycsb_output/dr_ledger
+quillSyscallsResultsDir=/home/rohan/projects/ycsb_output/dax
 
-parameters=' --open_files=1000 --max_file_size=134217730'
+parameters=' --open_files=1000 --max_file_size=2097152'
 echo Configuration: 20, 24, 64MB
 
-mkdir -p $quillResultsDir
+ulimit -c unlimited
+
+mkdir -p $quillAnonResultsDir
+mkdir -p $quillDRResultsDir
 mkdir -p $ext4DAXResultsDir
 mkdir -p $quillSyscallsResultsDir
 
@@ -34,14 +39,17 @@ load_workload()
 {
     workloadName=$1
     tracefile=$2
-    parameters=$3
+    setup=$5
+    appends=$6
     
-    if [ "$setup" = "quill" ]; then
-	resultDir=$quillResultsDir/Load$workloadName
+    if [ "$appends" = "anon" ]; then
+	resultDir=$quillAnonResultsDir/Load$workloadName
+    elif [ "$appends" = "dr" ]; then
+	resultDir=$quillDRResultsDir/Load$workloadName
     else
 	resultDir=$quillSyscallsResultsDir/Load$workloadName
     fi
-
+    
     mkdir -p $resultDir
     
     echo ----------------------- LevelDB YCSB Load $workloadName ---------------------------
@@ -53,12 +61,18 @@ load_workload()
 #nohup echo alohomora | sudo -S iotop -btoqa | grep --line-buffered bench > ycsb$run/iotop_loada_50M1.log &
 #nohup ~/pmap_script.sh > ycsb"$run"/pmap_loada_50M"$run".log &
 
+    sudo rm -rf $resultDir/*$runId
+
     date
     if [ "$setup" = "quill" ]; then
-	$quillDir/run_quill.sh -p $quillDir/ -t nvp_nvp.tree ./db_bench --use_existing_db=0 --benchmarks=ycsb,stats,printdb --db=$databaseDir --threads=1 --open_files=1000 >> $resultDir/Run$runId
+	if [ "$appends" = "anon" ]; then
+	    $quillAnonDir/run_quill.sh -p $quillAnonDir/ -t nvp_nvp.tree ./db_bench --use_existing_db=0 --benchmarks=ycsb,stats,printdb --db=$databaseDir --threads=1 --open_files=1000 2>&1 | tee $resultDir/Run$runId
+	else
+	    $quillDir/run_quill.sh -p $quillDir/ -t nvp_nvp.tree ./db_bench --use_existing_db=0 --benchmarks=ycsb,stats,printdb --db=$databaseDir --threads=1 --open_files=1000 2>&1 | tee $resultDir/Run$runId
+	fi
     else
-        #./db_bench --use_existing_db=0 --benchmarks=ycsb,stats,printdb --db=$databaseDir --threads=1 --open_files=1000 >> $resultDir/Run$runId
-	$quillSyscallsDir/run_quill.sh -p $quillSyscallsDir/ -t nvp_nvp.tree ./db_bench --use_existing_db=0 --benchmarks=ycsb,stats,printdb --db=$databaseDir --threads=1 --open_files=1000 >> $resultDir/Run$runId
+        ./db_bench --use_existing_db=0 --benchmarks=ycsb,stats,printdb --db=$databaseDir --threads=1 --open_files=1000 2>&1 | tee $resultDir/Run$runId
+	#$quillSyscallsDir/run_quill.sh -p $quillSyscallsDir/ -t nvp_nvp.tree ./db_bench --use_existing_db=0 --benchmarks=ycsb,stats,printdb --db=$databaseDir --threads=1 --open_files=1000 >> $resultDir/Run$runId
 
     fi
     date
@@ -88,15 +102,18 @@ run_workload()
 {
     workloadName=$1
     tracefile=$2
-    parameters=$3
-    setup=$4
+    setup=$5
+    appends=$6
 
-    if [ "$setup" = "quill" ]; then
-	resultDir=$quillResultsDir/Run$workloadName
+
+    if [ "$appends" = "anon" ]; then
+	resultDir=$quillAnonResultsDir/Run$workloadName
+    elif [ "$appends" = "dr" ]; then
+	resultDir=$quillDRResultsDir/Run$workloadName
     else
 	resultDir=$quillSyscallsResultsDir/Run$workloadName
     fi
-
+    
     mkdir -p $resultDir
     
     echo ----------------------- LevelDB YCSB Run $workloadName ---------------------------
@@ -107,12 +124,19 @@ run_workload()
     #nohup echo alohomora | sudo -S iotop -btoqa | grep --line-buffered bench > ycsb$run/iotop_loada_50M1.log &
     #nohup ~/pmap_script.sh > ycsb"$run"/pmap_loada_50M"$run".log &
 
+    sudo rm -rf $resultDir/*$runId
+
     date
     if [ "$setup" = "quill" ]; then
-	$quillDir/run_quill.sh -p $quillDir/ -t nvp_nvp.tree ./db_bench --use_existing_db=1 --benchmarks=ycsb,stats,printdb --db=$databaseDir --threads=1 --open_files=1000 >> $resultDir/Run$runId
+	if [ "$appends" = "anon" ]; then
+	    $quillAnonDir/run_quill.sh -p $quillAnonDir/ -t nvp_nvp.tree ./db_bench --use_existing_db=1 --benchmarks=ycsb,stats,printdb --db=$databaseDir --threads=1 --open_files=1000 2>&1 | tee $resultDir/Run$runId
+	else
+	    $quillDir/run_quill.sh -p $quillDir/ -t nvp_nvp.tree ./db_bench --use_existing_db=1 --benchmarks=ycsb,stats,printdb --db=$databaseDir --threads=1 --open_files=1000 2>&1 | tee $resultDir/Run$runId
+	fi
     else
-	#./db_bench --use_existing_db=1 --benchmarks=ycsb,stats,printdb --db=$databaseDir --threads=1 --open_files=1000 >> $resultDir/Run$runId
-	$quillSyscallsDir/run_quill.sh -p $quillSyscallsDir/ -t nvp_nvp.tree ./db_bench --use_existing_db=1 --benchmarks=ycsb,stats,printdb --db=$databaseDir --threads=1 --open_files=1000 >> $resultDir/Run$runId
+        ./db_bench --use_existing_db=1 --benchmarks=ycsb,stats,printdb --db=$databaseDir --threads=1 --open_files=1000 2>&1 | tee $resultDir/Run$runId
+	#$quillSyscallsDir/run_quill.sh -p $quillSyscallsDir/ -t nvp_nvp.tree ./db_bench --use_existing_db=0 --benchmarks=ycsb,stats,printdb --db=$databaseDir --threads=1 --open_files=1000 >> $resultDir/Run$runId
+
     fi
     date
 
@@ -140,35 +164,51 @@ run_workload()
 setup_expt()
 {
     setup=$1
-
+    appends=$4
+    
     sudo rm -rf $pmemDir/*
 
-    load_workload a $ycsbWorkloadsDir/loada_5M $parameters $setup
+    load_workload a $ycsbWorkloadsDir/loada_5M $parameters $setup $appends
+    $scriptsDir/pause_script.sh 10
+
+    sudo rm -rf $pmemDir/DR*
+
+    run_workload a $ycsbWorkloadsDir/runa_5M_5M $parameters $setup $appends
     $scriptsDir/pause_script.sh 10
     
-    run_workload a $ycsbWorkloadsDir/runa_5M_5M $parameters $setup
+    sudo rm -rf $pmemDir/DR*
+
+    run_workload b $ycsbWorkloadsDir/runb_5M_10M $parameters $setup $appends
     $scriptsDir/pause_script.sh 10
 
-    run_workload b $ycsbWorkloadsDir/runb_5M_10M $parameters $setup
+    sudo rm -rf $pmemDir/DR*
+
+    run_workload c $ycsbWorkloadsDir/runc_5M_10M $parameters $setup $appends
     $scriptsDir/pause_script.sh 10
 
-    run_workload c $ycsbWorkloadsDir/runc_5M_10M $parameters $setup
+    sudo rm -rf $pmemDir/DR*
+
+    :'
+    run_workload f $ycsbWorkloadsDir/runf_15M_15M $parameters $setup $appends
     $scriptsDir/pause_script.sh 10
 
-    run_workload f $ycsbWorkloadsDir/runf_5M_5M $parameters $setup
-    $scriptsDir/pause_script.sh 10
+    sudo rm -rf $pmemDir/DR*
 
-    run_workload d $ycsbWorkloadsDir/rund_5M_10M $parameters $setup
+    run_workload d $ycsbWorkloadsDir/rund_15M_5M $parameters $setup $appends
     $scriptsDir/pause_script.sh 10
 
     sudo rm -rf $pmemDir/*
 
-    load_workload e $ycsbWorkloadsDir/loade_5M $parameters $setup
+    load_workload e $ycsbWorkloadsDir/loade_15M $parameters $setup $appends
     $scriptsDir/pause_script.sh 10
 
-    run_workload e $ycsbWorkloadsDir/rune_5M_1M $parameters $setup
+    sudo rm -rf $pmemDir/DR*
+
+    run_workload e $ycsbWorkloadsDir/rune_15M_1M $parameters $setup $appends
     $scriptsDir/pause_script.sh 10
+    '
 }
 
-setup_expt quill $parameters
-setup_expt ext4DAX $parameters
+setup_expt quill $parameters dr
+#setup_expt quill $parameters anon
+#setup_expt ext4DAX $parameters

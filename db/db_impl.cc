@@ -570,8 +570,8 @@ void DBImpl::CompactMemTable() {
     has_imm_.Release_Store(nullptr);
     DeleteObsoleteFiles();
   } else {
-	  printf("%s: recording background error\n", __func__);
-    RecordBackgroundError(s);
+	  fprintf(stderr, "%s: recording background error\n", __func__);
+	  RecordBackgroundError(s);
   }
 }
 
@@ -840,8 +840,8 @@ Status DBImpl::FinishCompactionOutputFile(CompactionState* compact,
   if (s.ok()) {
     s = compact->builder->Finish();
   } else {
-	  printf("%s: status not okay. NumEntries = %llu, output file number = %llu\n", __func__, current_entries, output_number);
-    compact->builder->Abandon();
+	  fprintf(stderr, "%s: status not okay. NumEntries = %llu, output file number = %llu\n", __func__, current_entries, output_number);
+	  compact->builder->Abandon();
   }
   const uint64_t current_bytes = compact->builder->FileSize();
   compact->current_output()->file_size = current_bytes;
@@ -1370,10 +1370,10 @@ Status DBImpl::MakeRoomForWrite(bool force) {
   Status s;
   while (true) {
     if (!bg_error_.ok()) {
-	    printf("%s: in bg error\n", __func__);
-      // Yield previous error
-      s = bg_error_;
-      break;
+	    fprintf(stderr, "%s: in bg error\n", __func__);
+	    // Yield previous error
+	    s = bg_error_;
+	    break;
     } else if (
         allow_delay &&
         versions_->NumLevelFiles(0) >= config::kL0_SlowdownWritesTrigger) {

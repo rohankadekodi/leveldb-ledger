@@ -101,7 +101,7 @@ Status Writer::EmitPhysicalRecord(RecordType t, const char* ptr, size_t n) {
   if (s.ok()) {
     s = dest_->Append(Slice(ptr, n));
     if (s.ok()) {
-      s = dest_->Flush();
+       s = dest_->Flush();
     }
   }
   block_offset_ += kHeaderSize + n;
