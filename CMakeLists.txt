@@ -69,10 +69,24 @@ configure_file(
   "${PROJECT_BINARY_DIR}/${LEVELDB_PORT_CONFIG_DIR}/port_config.h"
 )
 
+## Strata FS#############
+#set(CMAKE_EXE_LINKER_FLAGS "-Wl,-rpath=/home/sekwon/strata/shim/glibc-build/ -Wl,-dynamic-linker=/home/sekwon/strata/shim/glibc-build/ld-linux-x86-64.so.2")
+
 include_directories(
   "${PROJECT_BINARY_DIR}/include"
   "${PROJECT_SOURCE_DIR}"
+  #"/home/sekwon/strata/libfs/src"
+  #"/home/sekwon/strata/libfs/lib/nvml/src/include"
 )
+
+#link_libraries(mlfs spdk pmem)
+#
+#link_directories(
+#  "/home/sekwon/strata/libfs/build/"
+#  "/home/sekwon/strata/libfs/src/storage/spdk/"
+#  "/home/sekwon/strata/libfs/lib/nvml/src/nondebug/"
+#)
+#########################
 
 if(BUILD_SHARED_LIBS)
   # Only export LEVELDB_EXPORT symbols from the shared library.
@@ -229,6 +243,8 @@ endif(HAVE_SNAPPY)
 if(HAVE_TCMALLOC)
   target_link_libraries(leveldb tcmalloc)
 endif(HAVE_TCMALLOC)
+
+
 
 # Needed by port_stdcxx.h
 find_package(Threads REQUIRED)

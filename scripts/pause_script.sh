@@ -7,16 +7,16 @@ fi
 sleep_time=$1
 #sleep_time=300
 
-echo "pause" > ~/projects/leveldb/scripts/pause
+echo "pause" > ~/leveldb-ledger/scripts/pause
 
 while true; 
 do
-	pause=`cat ~/projects/leveldb/scripts/pause`
+	pause=`cat ~/leveldb-ledger/scripts/pause`
 	if [ "$pause" == "pause" ]
 	then	
 		echo `date` ' Sleeping for '$sleep_time' seconds . . .'
 		sleep $sleep_time
-		echo "" > ~/projects/leveldb/scripts/pause
+		echo "" > ~/leveldb-ledger/scripts/pause
 	else
 		break;
 	fi

@@ -27,6 +27,20 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
+//#define STRATA_ENABLE   1
+//#define YCSB_RUN        1
+
+#ifdef STRATA_ENABLE
+// Strata
+#include <sys/stat.h>
+#include <dirent.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <mlfs/mlfs_interface.h>
+#endif
+
 
 #define MAX_TRACE_OPS 100000000
 #define MAX_VALUE_SIZE (1024 * 1024)
@@ -552,10 +566,11 @@ class Benchmark {
 	  }
 		
 	  printf("Thread %d: Parsing trace ...\n", tid);
-	  trace_ops[tid] = (struct trace_operation_t *) mmap(NULL, MAX_TRACE_OPS * sizeof(struct trace_operation_t), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-	  if (trace_ops[tid] == MAP_FAILED)
-		  perror(NULL);
-	  assert(trace_ops[tid] != MAP_FAILED);
+//	  trace_ops[tid] = (struct trace_operation_t *) mmap(NULL, MAX_TRACE_OPS * sizeof(struct trace_operation_t), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	  trace_ops[tid] = (struct trace_operation_t *) malloc(MAX_TRACE_OPS * sizeof(struct trace_operation_t));
+//	  if (trace_ops[tid] == MAP_FAILED)
+//		  perror(NULL);
+//	  assert(trace_ops[tid] != MAP_FAILED);
 		
 	  buf = (char *) malloc(bufsize);
 	  assert (buf != NULL);
@@ -670,11 +685,10 @@ class Benchmark {
   void YCSB(ThreadState* thread) {
 	  int tid = thread->tid;
 	  char trace_file[1000];
-		
+
 	  envstrinput(trace_file);
-		
 	  parse_trace(trace_file, tid);
-		
+
 	  struct rlimit rlim;
 	  rlim.rlim_cur = 1000000;
 	  rlim.rlim_max = 1000000;
@@ -684,9 +698,8 @@ class Benchmark {
 	  struct trace_operation_t *curop = trace_ops[tid];
 	  unsigned long long total_ops = 0;
 	  struct timeval start, end;
-		
+
 	  printf("Thread %d: Replaying trace ...\n", tid);
-		
 	  gettimeofday(&start, NULL);
 	  fprintf(stderr, "\nCompleted 0 ops");
 	  fflush(stderr);
@@ -695,6 +708,8 @@ class Benchmark {
 		  thread->stats.FinishedSingleOp();
 		  curop++;
 		  total_ops++;
+          //while (make_digest_request_async(100) == -EBUSY);
+          //wait_on_digesting();
 		  //if (total_ops % 10000 == 0) {
 		  //fprintf(stderr, "\rCompleted %llu ops", total_ops);
 		  //}
@@ -886,7 +901,6 @@ class Benchmark {
     thread->stats.Start();
     (arg->bm->*(arg->method))(thread);
     thread->stats.Stop();
-
     {
       MutexLock l(&shared->mu);
       shared->num_done++;
@@ -1326,12 +1340,147 @@ class Benchmark {
 
 }  // namespace leveldb
 
+#ifdef STRATA_ENABLE
+int fileCopy(char *src, char *dst)
+{
+#if 0
+    FILE * f;
+    FILE * g;
+    int cnt=0;
+    char buff[1];
+    printf(" ");
+    if((f=fopen(filename, "rb"))==NULL)
+    {
+        exit(1);
+    }
+
+    if((g=fopen(newfilename, "wb"))==NULL)
+    {
+        exit(1);
+    }
+
+    while(!feof(f))
+    {
+        fread(&buff,1,1,f);
+        if(!feof(f))
+            fwrite(&buff, 1,1, g); cnt++;
+    }
+
+    fclose(f);
+    fclose(g);
+
+    return 1;
+#endif
+    int in_fd, out_fd, rd_count;
+    char buffer[4096];
+#ifdef STRATA_ENABLE
+    if ((in_fd = open(src, O_RDONLY)) < 0) 
+        return 1;
+    if ((out_fd = creat(dst, 0755)) < 0) 
+        return 1;
+#else
+    if ((in_fd = open(src, O_RDONLY)) < 0) 
+        return 1;
+    if ((out_fd = creat(dst, 0755)) < 0) 
+        return 1;
+#endif
+
+    while (1) {
+        if ((rd_count = read(in_fd, buffer, 4096)) <= 0) 
+            break;
+        if (write(out_fd, buffer, rd_count) <= 0) 
+            return 1;
+    }
+
+    if (rd_count < 0) 
+        return 1;
+#ifndef STRATA_ENABLE
+//    while (fsync(out_fd) == -1);
+#endif
+    close(in_fd);
+    close(out_fd);
+    return 0;
+}
+
+int dirYesNo(char fname[])
+{
+    struct stat buf;
+    lstat(fname,&buf);
+    return S_ISDIR(buf.st_mode);
+}
+
+
+mode_t st_modeTomode_t(char *filepath)
+{
+    struct stat buf;
+    lstat(filepath,&buf);
+    return (mode_t)buf.st_mode;
+}
+
+int dirCopy(char* dirpath, char* newdirpath)
+{
+    DIR *dir_info        = NULL;
+    struct dirent    *dir_entry        = NULL;
+    char filepath[1000];
+    char newfilepath[1000];
+    dir_info = opendir(dirpath);
+
+    if ( NULL == dir_info)
+    {
+            exit(1);
+    }
+    else
+    {
+        while( (dir_entry = readdir( dir_info) ) != NULL )
+        {
+            mkdir(newdirpath,st_modeTomode_t(dirpath));
+            if( (strcmp(dir_entry->d_name, "..") == 0 ) ||
+                    (strcmp(dir_entry->d_name, ".") == 0 ))
+                continue;
+
+            sprintf(filepath, "%s/%s", dirpath, dir_entry->d_name);
+                sprintf(newfilepath,"%s/%s",newdirpath,dir_entry->d_name);
+
+                if(dirYesNo(filepath))
+                {
+                    mkdir(newdirpath,st_modeTomode_t(filepath));
+                    dirCopy(filepath,newfilepath);
+                }
+                else {
+                    fileCopy(filepath,newfilepath);
+                }
+        }
+    }
+
+    closedir(dir_info);
+
+    return 0;
+}
+#endif
+
 int main(int argc, char** argv) {
   FLAGS_write_buffer_size = leveldb::Options().write_buffer_size;
   FLAGS_max_file_size = leveldb::Options().max_file_size;
   FLAGS_block_size = leveldb::Options().block_size;
   FLAGS_open_files = leveldb::Options().max_open_files;
   std::string default_db_path;
+
+#ifdef STRATA_ENABLE
+  // Strata init
+#ifdef YCSB_RUN
+  char *src = (char *) malloc(100);
+  src = "/home/sekwon/leveldb-ledger/loade_data/";
+  char *dst = (char *) malloc(100);
+  dst = "/mlfs/";
+#endif
+  init_fs();
+  mkdir("/mlfs/", 0775);
+#ifdef YCSB_RUN
+  dirCopy(src, dst);
+  while (make_digest_request_async(100) == -EBUSY);
+  wait_on_digesting();
+#endif
+#endif
 
   for (int i = 1; i < argc; i++) {
     double d;
@@ -1389,5 +1538,9 @@ int main(int argc, char** argv) {
 
   leveldb::Benchmark benchmark;
   benchmark.Run();
+#ifdef STRATA_ENABLE
+  // Strata
+  shutdown_fs();
+#endif
   return 0;
 }

@@ -2,8 +2,8 @@
 
 set -x
 
-ycsb_workloads_folder=/home/rohan/projects/ycsb_workloads
-ycsb_folder=/home/rohan/projects/YCSB
+ycsb_workloads_folder=/home/sekwon/ycsb_workloads
+ycsb_folder=/home/sekwon/ycsb-ledger
 record_count=5000000
 
 operation_count_bcd=10000000
